@@ -6,30 +6,61 @@ const pdfparse = require('pdf-parse');
 const { writePatente } = require('./app')
 //mi parser a mano
 const {Parser , MAYBE , FOUND , ERROR , SAVING} = require('./parser');
-
+//para escrbir csv
+const {ParserAnyNumber} = require('./parserAnyNumber')
+const {initCSVWriter , writeCSVpatente} = require('./csvwriter')
 const fs = require('fs')
 const dir = './data_small'
 const files = fs.readdirSync(dir);
-
+const outputFilename = 'patentes5.csv'
 console.log('found files are:');
 console.log(files)
 
-const campos = [ 10 , 21 ,22, 29 , 30 , 41 , 51 , 54 , 57 , 61 , 62 , 71 , 72 , 74 , 84 ];
+const campos = [ 10 , 21 , 29 , 30 , 41 , 51 , 54 , 57 , 61 , 62 , 71 , 72 , 83 ];
 
-let target_found = 0
-//files.forEach( (filename) => console.log(filename));
+const campo51 = [
+    "C07K16",
+    "C07K2317",
+    "A61K39",
+    "C07K2319" , 
+    "G01N33" , 
+    "C07K14", 
+    "A61K47", 
+    "A61K38", 
+    "C12N15" ,
+    "A61P35" ,
+    "A61K45" , 
+    "A61K31", 
+    "G01N2333", 
+    "C12N5"
+    ];
+    
 
-//
+let campo51RegExp;
+let total = 0
+
+generate51RegExp();
 customParserApp();
+
 async function customParserApp(){
+
+    await initCSVWriter(outputFilename , campos);
+    totales = []
     await Promise.all(files.map( async (filename) => {
         let file = fs.readFileSync(`${dir}/${filename}`);
         data = await pdfparse(file)
         let text = data.text;
-        //console.log(text , text.text_len);
-        target_found += await  masterParser(text, text.length , filename);
+        let totalPDF = await  masterParser(text, text.length , filename);
+        total += totalPDF;
+        if(totalPDF > 0){
+            totales.push( [ filename , totalPDF] );
+        }
     }));
-    console.log(`Se encontraron ${target_found}  39/40`);
+    console.log(total)
+    totales.forEach( (t)=> {
+        console.log(t)
+    })
+
 }
 
 function resetAll(parserMap){
@@ -37,28 +68,37 @@ function resetAll(parserMap){
         parserMap.get(campos[i]).reset();
     }
 }
+function generate51RegExp(){
+    let pattern = "("
+    let count = 0;
+    campo51.forEach((c)=>{
+    
+        if (count > 0)
+            pattern = pattern.concat("|");
+        
+        count++
+        pattern = pattern.concat( `${c}`);
+
+    })
+    pattern = pattern.concat(")")
+    console.log(pattern);
+    campo51RegExp = new RegExp(pattern)
+}
 
 function resetAllExcluding(parserMap , exclude){
     for ( let i = 0 ; i < campos.length ; i++){
         if(campos[i] != exclude){
-        parserMap.get(campos[i]).reset();
-        }
-    }
-}
-function printSaved(parserMap){
-    let aux;
-    for ( let i = 0 ; i < campos.length ; i++){
-        aux = parserMap.get(campos[i]);
-        if(aux.state == SAVING){
-            console.log(`el parser ${aux.target} tenia adentro lo siguiente: ${aux.getSaved()}`)
-        }else{
-            console.log(`el parser ${aux.target} estaba en el estado ${aux.state}`);
+            parserMap.get(campos[i]).reset();
         }
     }
 }
 
-function whoFound(p){
+
+function whoFound(p , any){
     let aux;
+    if(any.state == FOUND){
+        return -2;
+    }
     for ( let i = 0 ; i < campos.length ; i++){
         aux = p.get(campos[i]);
         if( aux.state == FOUND){
@@ -67,7 +107,11 @@ function whoFound(p){
     }
     return -1;
 }
-
+function clearBuffers(p){
+    for ( let i = 0 ; i < campos.length ; i++){
+        p.get(campos[i]).emptyParser();
+    }
+}
 function whoFoundExcluding(p , exclude){
     let aux;
     for ( let i = 0 ; i < campos.length ; i++){
@@ -83,7 +127,7 @@ function initParsersCampos(){
     const map = new Map();
     for( let i = 0 ; i < campos.length ; i++)
     {
-        console.log(`(${campos[i]})`);
+     
         map.set(campos[i] , new Parser(`(${campos[i]})` , '\n'));
     }
     return map
@@ -93,64 +137,69 @@ function initParsersCampos(){
 async function masterParser(text , text_len , filename){
     
     const p = initParsersCampos();
-    let parserCode = new Parser('A61P', ',');
-    
+    const any = new ParserAnyNumber('\n')
     let totalPatentes = 0;
-    let targetLocal = 0;
 
-    let count = 0;
-    let enterCount = 0;
-    let actual = -1;
-    let newParser = -1;
-    let auxParser;
+    let count = 0; //cantidad de letras
+    let enterCount = 0; //cantidad de enters
+    let actual = -1; //el uiltimo parser que tiro FOUND 
+    let newParser = -1; //un numero parser auxiliar
+
+    let auxParser; 
     let buffer;
 
-    let patenteActual = {};
-    let patentes = [];
+    let patenteActual = {}; //la pantente que se fue levantando
+    let patentes = []; //el array con las patentes que fue leyendo
 
     for(let i = 0 ; i < text_len ; i++ ){
         c = text[i];
        // checkState(p);
+    
         count++;
-
+        //primero le doy la letra a cada parser
         for ( let i = 0 ; i <campos.length ; i++){
             p.get(campos[i]).feed(c);
         }
+        any.feed(c)
         
+        //si encontre un campo 10 significa que estoy leyendo una nueva patente
         if(p.get(10).state == FOUND){
-            console.log('10 found');
-            if(totalPatentes > 1 ){
+            //me fijo si tiene alguno de los campos de los que me interesan
+            if(campo51RegExp.test(patenteActual[51])){
+                patenteActual['pdf'] = filename;
                 patentes.push(patenteActual);
-                patenteActual = {};
             }
+            patenteActual = {};
             totalPatentes++;
         }
-
-
-
-      
-
+        //Luego de haber leido los primeros 4 caracteres de una linea puedo saber si estoy viendo efectivamente un campo que me interesa, un campo que no, o si sigue siendo texto del campo anterior que ocupe mas de una linea
         if(count == 4){
-            //console.log(`haciendo el checko con el count en 4 , la letra actual es ${c} y estoy con el parser ${actual}`)
+            //el actual en -1 significa que no estoy en ningun campo
             if(actual != -1){
-                newParser = whoFound(p);
-                if(newParser != -1 ){
+                //me fijo si quien encontro
+                newParser = whoFound(p,any);
+                if(newParser >= 0 ){
                     auxParser = p.get(actual);
+
+
+
                     buffer = auxParser.getSaved();
-                    //console.log(buffer.substring(0 , buffer.length - 4));
-                    patenteActual[actual] = buffer.substring(0 , buffer.length - 4);
-                    actual = newParser;
+                    //el primer replace saca los espacios multiples y los deja en uno solo
+                    //el segundo te saca los saltos de linea con guión en español en una misma palabra
+                    patenteActual[actual] = buffer.substring(0 , buffer.length - 4).trim().replace(/  +/g, ' ');
+                    
                 }
+                actual = newParser;
             }else{
-                actual = whoFound(p);
+                actual = whoFound(p,any);
             }
         }
 
         if(c == '\n'){
 
      
-            if(actual == -1 ){ 
-                actual = whoFound(p);
+            if(actual >= 0 ){ 
+                actual = whoFound(p,any);
             }
            // console.log(count)
            // printSaved(p);
@@ -158,12 +207,12 @@ async function masterParser(text , text_len , filename){
             count = 0;
             //doble enter
             if(enterCount == 2 ){
-                newParser = whoFound(p);
-                if( newParser != -1 ){
+                newParser = whoFound(p,any);
+                if( newParser >= 0){
                 auxParser = p.get(newParser);
                 buffer = auxParser.getSaved();
                 //console.log(buffer.substring(0 , buffer.length - 4));
-                patenteActual[actual] = buffer.substring(0 , buffer.length - 4);
+                patenteActual[actual] = buffer.substring(0 , buffer.length - 4).trim().replace(/  +/g, ' ');
                 }
                 actual = -1;
             }
@@ -172,31 +221,29 @@ async function masterParser(text , text_len , filename){
                // console.log("overflow del campo 41");
               //  console.log(`Tenia adentro: ${p.get(41).getSaved()}`);
                 auxParser =  p.get(41);
-                patenteActual[41] = auxParser.getSaved();
+                patenteActual[41] = auxParser.getSaved().trim().replace(/  +/g, ' ');
                 actual = -1;
             }
             resetAllExcluding(p, actual);
+            any.reset()
            // console.log(`reset con actual en ${actual}`);
         }else {
             enterCount = 0
-            /*
-            if(p.get(51).state == SAVING){
-                if( c == ','){
-                    if(parserCode.state== FOUND){
-                        targetLocal+= 1;
-                    }
-                    parserCode.reset();
-                }
-                parserCode.feed(c);
-            }*/
+        
         }
        
     }
-    patentes.push(patenteActual);
-    console.log(`Se encontraron ${totalPatentes} con ${targetLocal} local en ${filename}`);
-    console.log(patentes);
-    for( let i = 0 ; i < patentes.length ; i++){
-        await writePatente(patentes[i][10] , patentes[i])
+    if(campo51RegExp.test(patenteActual[51])){
+        patenteActual['pdf'] = filename;
+        patentes.push(patenteActual);
     }
-    return targetLocal;
+
+
+    for( let index = 0 ; index < patentes.length ; index++){
+        totalLocal++;
+        await writeCSVpatente(patentes[index]);
+        //await writePatente(patentes[j][10] , patentes[j])
+    }
+
+    return patentes.length;
 }

@@ -57,7 +57,7 @@ class Parser{
             return;
         }
         
-        if( this.state = FOUND){
+        if( this.state == FOUND || this.state == SAVING){
             this.state = SAVING
             if(char == '\n'){
                 char = ' ';
