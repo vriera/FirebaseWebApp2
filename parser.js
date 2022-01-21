@@ -25,7 +25,7 @@ class Parser{
     }
     
     getSaved(){
-        return this.saved.join("")
+        return this.saved.join("").replace(/;/g , '.,')
     }
     
     feed(char){
