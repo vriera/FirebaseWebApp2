@@ -11,38 +11,28 @@ const {ParserAnyNumber , anyTester} = require('./parserAnyNumber')
 const {initCSVWriter , writeCSVpatente} = require('./csvwriter')
 const fs = require('fs');
 const { format } = require('url');
+const { getTerminosRegExp , getCampo51RegExp} = require('./setupUtils')
+const {resetAll , resetAllExcluding , whoFound , clearBuffers , whoFoundExcluding , shouldAdd } = require('./utils')
 const dir = './data_small'
 const files = fs.readdirSync(dir);
-const outputFilename = 'B_patentes0.csv'
+const outputFilename = 'B_patentes0.csv';
+
 console.log('found files are:');
 console.log(files)
 
 const campos = [ 10 , 21 , 29 , 30 , 41 , 51 , 54 , 57 , 61 , 62 , 71 , 72 , 83 ];
 
-const campo51 = [
-    "C07K16",
-    "C07K2317",
-    "A61K39",
-    "C07K2319" , 
-    "G01N33" , 
-    "C07K14", 
-    "A61K47", 
-    "A61K38", 
-    "A61P35" ,
-    "A61K45" , 
-    "A61K31", 
-    "G01N2333", 
-    ];
-    
 
+let terminosRegExp;
 let campo51RegExp;
 let total = 0
 
-generate51RegExp();
+
 customParserApp();
 
 async function customParserApp(){
-
+    terminosRegExp = await getTerminosRegExp();
+    campo51RegExp = await getCampo51RegExp();
     await initCSVWriter(outputFilename , campos);
     totales = []
     await Promise.all(files.map( async (filename) => {
@@ -59,69 +49,7 @@ async function customParserApp(){
     totales.forEach( (t)=> {
         console.log(t)
     })
-
-}
-
-function resetAll(parserMap){
-    for ( let i = 0 ; i < campos.length ; i++){
-        parserMap.get(campos[i]).reset();
-    }
-}
-function generate51RegExp(){
-    let pattern = "("
-    let count = 0;
-    campo51.forEach((c)=>{
     
-        if (count > 0)
-            pattern = pattern.concat("|");
-        
-        count++
-        pattern = pattern.concat( `${c}`);
-
-    })
-    pattern = pattern.concat(")")
-    console.log(pattern);
-    campo51RegExp = new RegExp(pattern)
-}
-
-function resetAllExcluding(parserMap , exclude){
-    for ( let i = 0 ; i < campos.length ; i++){
-        if(campos[i] != exclude){
-            parserMap.get(campos[i]).reset();
-        }
-    }
-}
-
-
-function whoFound(p , any){
-    let aux;
-    
-    for ( let i = 0 ; i < campos.length ; i++){
-        aux = p.get(campos[i]);
-        if( aux.state == FOUND){
-            return campos[i];
-        }
-    }
-    
-    if(any.state == FOUND){
-        return -any.number;
-    }
-    return -1;
-}
-function clearBuffers(p){
-    for ( let i = 0 ; i < campos.length ; i++){
-        p.get(campos[i]).emptyParser();
-    }
-}
-function whoFoundExcluding(p , exclude){
-    let aux;
-    for ( let i = 0 ; i < campos.length ; i++){
-        aux = p.get(campos[i]);
-        if( campos[i] != exclude && aux.state == FOUND){
-            return campos[i];
-        }
-    }
-    return -1;
 }
 
 function initParsersCampos(){
@@ -134,23 +62,6 @@ function initParsersCampos(){
     return map
 }
 
-
-function shouldAdd( number , array ){
-    if(number <-1 ){
-        console.log(`Flipped: ${number}`)
-        number = -number
-    }
-    if(number == 41 ){
-        return true;
-    }
-    console.log(`tengo el numero ${number}  y en el array tengo ${array}`)
-    for(let i = 0 ; i < array.length ; i++){
-        if( number < array[i] ){
-            return false;
-        }
-    }
-    return true;
-}
 
 
 async function masterParser(text , text_len , filename){
@@ -171,6 +82,9 @@ async function masterParser(text , text_len , filename){
     let patentes = []; //el array con las patentes que fue leyendo
 
     let camposFound = [];
+
+    let patentesEnteras = [];
+    let patenteEntera = [];
     for(let i = 0 ; i < text_len ; i++ ){
         c = text[i];
        // checkState(p);
@@ -179,8 +93,9 @@ async function masterParser(text , text_len , filename){
         //primero le doy la letra a cada parser
         for ( let i = 0 ; i <campos.length ; i++){
             p.get(campos[i]).feed(c);
+           
         }
-
+        patenteEntera.push(c);
         any.feed(c)
         
         //si encontre un campo 10 significa que estoy leyendo una nueva patente
@@ -191,17 +106,25 @@ async function masterParser(text , text_len , filename){
                 patenteActual[actual] = buffer.substring(0 , buffer.length - 4).trim().replace(/  +/g, ' ');
                 camposFound.push(actual);
             }
-            console.log(camposFound);
+            //console.log(camposFound);
             camposFound = [];
             //me fijo si tiene alguno de los campos de los que me interesan
             if(patenteActual[51]){
                 if(campo51RegExp.test(patenteActual[51].replace(/\s/g , ''))){
                     if(! /A01H/g.test(patenteActual[51].replace(/\s/g , ''))){
-                        patenteActual['pdf'] = filename;
-                        patentes.push(patenteActual);
+                        let patenteProcesada = patenteEntera.join("").replace(/-\n/g , '').replace(/\n/g , " ");
+                        if( /[\n ^]anti/i.test(patenteProcesada) || terminosRegExp.test(patenteProcesada)){
+                            patenteActual['pdf'] = filename;
+                            patentes.push(patenteActual);
+                        }else{
+                            console.log('miss');
+                        }
+                       
                     }
                 }
             }
+            
+            patenteEntera = [];
             patenteActual = {};
             totalLocal++;
         }
@@ -286,7 +209,8 @@ async function masterParser(text , text_len , filename){
         await writeCSVpatente(patentes[index]);
         //await writePatente(patentes[j][10] , patentes[j])
     }
-    patentes.forEach((p) =>{console.log(p)});
+    //patentes.forEach((p) =>{console.log(p)});
+    patentesEnteras.forEach((p) =>{console.log(p)});
     return patentes.length;
 }
 

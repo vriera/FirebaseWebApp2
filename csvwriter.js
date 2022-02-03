@@ -41,7 +41,7 @@ async function writeCSVpatente( patente  ){
     console.log("CSV writer not initialized!");
     return;
   }
-  console.log("writing");
+  //console.log("writing");
     let line = "";
     for(let i = 0 ; i < campos.length ; i++){
       if( i + 1 != campos.length){

@@ -1,0 +1,41 @@
+Inmunoglobulina
+Anti
+IgG
+IgA
+IgE
+IgD
+IgM
+Ig
+Ab
+Fab
+Fab2
+fragmento de unión al antígeno
+Fc
+fragmento cristalizable
+CDR
+región determinante de la complementariedad
+sitios de reconocimiento de antígeno
+lugar de unión al antígeno
+Cadena ligera o cadena liviana
+Cadena pesada
+Antígeno
+Epitope 
+epitopo
+Ag
+Inmuno conjugado
+Conjugado
+conjugación
+Monoclonal
+Policlonal
+Composición
+Composición farmacéutica
+Formulación
+Formulación farmacéutica
+Inmunoterapia
+Inmunoterapéutico
+Inmuno check point
+Inmuno 
+Inhibidor de Puntos de Control Inmunitario
+Immune Checkpoint Inhibitor
+Vacuna
+Inmunización
