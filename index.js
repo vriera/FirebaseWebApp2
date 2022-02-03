@@ -11,9 +11,9 @@ const {ParserAnyNumber , anyTester} = require('./parserAnyNumber')
 const {initCSVWriter , writeCSVpatente} = require('./csvwriter')
 const fs = require('fs');
 const { format } = require('url');
-const dir = './data'
+const dir = './data_small'
 const files = fs.readdirSync(dir);
-const outputFilename = 'patentes12.csv'
+const outputFilename = 'B_patentes0.csv'
 console.log('found files are:');
 console.log(files)
 
@@ -28,12 +28,10 @@ const campo51 = [
     "C07K14", 
     "A61K47", 
     "A61K38", 
-    "C12N15" ,
     "A61P35" ,
     "A61K45" , 
     "A61K31", 
     "G01N2333", 
-    "C12N5"
     ];
     
 
@@ -198,8 +196,10 @@ async function masterParser(text , text_len , filename){
             //me fijo si tiene alguno de los campos de los que me interesan
             if(patenteActual[51]){
                 if(campo51RegExp.test(patenteActual[51].replace(/\s/g , ''))){
-                    patenteActual['pdf'] = filename;
-                    patentes.push(patenteActual);
+                    if(! /A01H/g.test(patenteActual[51].replace(/\s/g , ''))){
+                        patenteActual['pdf'] = filename;
+                        patentes.push(patenteActual);
+                    }
                 }
             }
             patenteActual = {};
@@ -274,8 +274,10 @@ async function masterParser(text , text_len , filename){
     //condicion para agregar al utlimo
     if(patenteActual[51]){
         if(campo51RegExp.test(patenteActual[51].replace(/\s/g , ''))){
-            patenteActual['pdf'] = filename;
-            patentes.push(patenteActual);
+            if(! /A01H/g.test(patenteActual[51].replace(/\s/g , ''))){
+                patenteActual['pdf'] = filename;
+                patentes.push(patenteActual);
+            }
         }
     }
 
